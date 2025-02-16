@@ -3,8 +3,8 @@ import random
 import socket
 import struct
 import time
-
 import select
+
 
 def checksum(source_string):
     count = len(source_string) % 2
@@ -54,6 +54,8 @@ def traceroute(host, print_num, print_summary, count=1):
     max_hops = 30
     timeout = 5
     data_size = 56
+    timeout_count = {ttl: 0 for ttl in range(1, max_hops + 1)}
+
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     except PermissionError:
@@ -78,15 +80,31 @@ def traceroute(host, print_num, print_summary, count=1):
         addr, rtt, reached = receive_traceroute(sock, packet_id, ttl, timeout)
 
         if addr:
+            if print_num:
+                print(f"{addr[0]}: time={rtt:.2f}ms", end=" ")
+            else:
+                try:
+                    host_name = socket.gethostbyaddr(addr[0])[0]
+                    print(f"{host_name} ({addr[0]}): time={rtt:.2f}ms", end=" ")
+                except socket.herror:
+                    print(f"{addr[0]}: time={rtt:.2f}ms", end=" ")
+
             if reached:
-                print(f"Reply from {addr[0]}: time={rtt:.2f}ms")
+                print("Destination reached.")
                 break
             else:
-                print(f"Time Exceeded from {addr[0]}: time={rtt:.2f}ms")
+                print("Time Exceeded.")
         else:
             print("Request Timed Out")
+            timeout_count[ttl] += 1
 
         time.sleep(1)
+
+    if print_summary:
+        print("\nSummary of probes not answered:")
+        for ttl in range(1, max_hops + 1):
+            if timeout_count[ttl] > 0:
+                print(f"Hop {ttl}: {timeout_count[ttl]} probe(s) not answered.")
 
     sock.close()
 
